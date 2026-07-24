@@ -1,37 +1,29 @@
 #!/bin/bash
 set -e
 
-ORIGINAL_SCRIPT="build.sh"          # 原大脚本文件名，请根据实际情况修改
-TMP_SCRIPT="build.sh.tmp"
+ORIGINAL_SCRIPT="build.sh"    # 原大脚本
+TMP_SCRIPT="build.sh.extract"
 
-echo "📦 从原脚本中释放文件并构建..."
+echo "📦 从原脚本提取文件到项目目录（跳过构建）..."
 
-# 备份原脚本，并插入退出逻辑
+# 复制原脚本
 cp "$ORIGINAL_SCRIPT" "$TMP_SCRIPT"
 
-# 在“构建并安装”之前插入条件退出（确保所有文件生成和配置修改都已执行）
-sed -i '/# ==================== 构建并安装 ====================/i \
-if [ "$EXTRACT_ONLY" = "true" ]; then \
-    echo "✅ 文件已释放到项目目录，配置已修改，退出。" \
-    exit 0 \
-fi' "$TMP_SCRIPT"
+# 注释掉所有包含 gradlew 或 adb install 的行（以及可能存在的构建相关 echo）
+sed -i 's/^\(.*\.\/gradlew.*\)/#\1/' "$TMP_SCRIPT"
+sed -i 's/^\(.*adb install.*\)/#\1/' "$TMP_SCRIPT"
+# 也可能有 “构建并安装” 的 echo，可选择性注释
+sed -i 's/^\(.*构建并安装.*\)/#\1/' "$TMP_SCRIPT"
+sed -i 's/^\(.*APK_PATH.*\)/#\1/' "$TMP_SCRIPT"
+# 可能还有 if [ -f "$APK_PATH" ] 等，一并注释
+sed -i 's/^\([[:space:]]*if \[ -f "\$APK_PATH" \].*\)/#\1/' "$TMP_SCRIPT"
+sed -i 's/^\([[:space:]]*adb.*\)/#\1/' "$TMP_SCRIPT"
+sed -i 's/^\([[:space:]]*echo.*安装完成.*\)/#\1/' "$TMP_SCRIPT"
 
-# 设置环境变量，执行修改后的脚本（只做释放和配置，不构建）
-EXTRACT_ONLY=true bash "$TMP_SCRIPT"
+# 执行修改后的脚本，此时所有 cat 和 cp 都会执行，但构建跳过
+bash "$TMP_SCRIPT"
 
-# 清理临时脚本
+# 清理
 rm -f "$TMP_SCRIPT"
 
-# 现在所有源文件、资源、配置都已就位，直接构建
-echo "🔨 开始构建 APK..."
-./gradlew clean assembleDebug
-
-APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-if [ -f "$APK_PATH" ]; then
-    echo "📲 安装 APK（覆盖安装）..."
-    adb install -r "$APK_PATH"
-    echo "🎉 构建并安装完成！"
-else
-    echo "❌ 构建失败，未找到 APK"
-    exit 1
-fi
+echo "✅ 文件释放完成！现在可以手动执行 ./gradlew assembleDebug 构建"
